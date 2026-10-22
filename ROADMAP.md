@@ -4,6 +4,7 @@
 
 本地全部可用。模板本身不部署上线（2026-10-20 决定），线上验证随第一个热词站进行。下文提到的 `.tmp/` 工件不入库，只在作者本机。
 
+- KIE Provider（本地功能分支）：新增 Kling 2.6 Motion Control 的提交、查询、回调、R2 和失败退款接入；支持 720p/1080p、image/video 方向和站点 Prompt。提交结果不明时不重发，确认 credits 写入元数据，美元费用未知时保持 NULL。官方契约、配置与限制见 [docs/kie.md](docs/kie.md)。验证通过：类型检查、260 项单元测试、构建、完整 e2e 65 项；费用汇总修正后另跑后台与生成 e2e 9 项全部通过。未调用真实收费 API，未推送、合并或部署。
 - 已验证：
   - 检查与构建：`npm run typecheck`；`npm test`（214 个单元测试）；`npm run build`。
   - e2e：`npm run test:e2e`（64 个用例全部通过，2026-10-22）。

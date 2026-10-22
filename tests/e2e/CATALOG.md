@@ -28,6 +28,11 @@ e2e 跑在本地 dev server 上，支付、视频、审核服务商都是 mock�
 - `reconcile.spec.ts` › `Cron 对账与查单接口：退避、并发只入账一次、迟到 webhook 不重复、越权与金额不符不自动处理`
   - 少付的订单查单结果为 mismatch，之后 Cron 不再自动查它；后台查单提示人工核对。
 
+### KIE 回调鉴权
+
+- `generation.spec.ts` › `KIE 回调拒绝缺失或伪造 token`
+  - 缺失或伪造任务 token 时返回 401，不能通过回调里的成功状态和输出 URL 完成任务。
+
 ### webhook 丢失后的补救
 
 - `reconcile.spec.ts` › `webhook 丢失：成功页久等未到账时主动查单，订单入账并显示成功`
@@ -269,7 +274,7 @@ e2e 跑在本地 dev server 上，支付、视频、审核服务商都是 mock�
 | --- | --- | --- | --- |
 | 真实支付商的 webhook 和退款 | 需要公网隧道和支付商后台的 webhook 地址，Waffo 退款还要等十几分钟 | 验签与映射的单元测试；sandbox e2e 无隧道时验证收银台、回跳和查单入账；webhook 模式手动跑 | 发版前按需跑 `SANDBOX_WEBHOOK=1` |
 | 真实支付商的订阅续费、扣款失败，Dodo 的取消与撤销 | test 模式触发不了续费和扣款失败（要等一个计费周期）；Dodo 的取消要 API 密钥有 Subscriptions 写入，模板的 test 密钥还没有 | 首付、激活、当月积分、门户和 Waffo 的取消由 sandbox 订阅用例覆盖（2026-10-21 手动跑过）；续费和扣款失败有按文档构造的映射单元测试，e2e 用 mock 订阅事件走同一套入账逻辑 | 补上密钥权限后重跑 Dodo 订阅用例；第一个热词站上线后观察第一次真实续费 |
-| 真实视频生成和 `/api/webhooks/fal`、`/api/webhooks/yir` 的成功回调 | 需要 `FAL_KEY` 或 `YIR_API_KEY`，每次调用要付费；e2e 用 mock 服务商，靠轮询完成 | yir 的提交、查询、错误映射和实际成本有 provider 契约单元测试（`yir.test.ts`，按 yir 文档构造响应）；smoke 巡检检查未签名回调返回 401 | 第一个热词站选定服务商后用真实 key 跑一单 |
+| 真实视频生成和 `/api/webhooks/fal`、`/api/webhooks/yir`、`/api/webhooks/kie` 的成功回调 | 需要 `FAL_KEY`、`YIR_API_KEY` 或 `KIE_API_KEY`，每次调用要付费；e2e 用 mock 服务商，靠轮询完成 | KIE 的提交、查询、错误映射、超时、不明提交不重发、credits 费用和队列退款有 Mock 单元测试（`kie.test.ts`、`kie-jobs.test.ts`）；yir 的提交、查询、错误映射和实际成本有 provider 契约单元测试（`yir.test.ts`，按 yir 文档构造响应）；smoke 巡检检查未签名回调返回 401 | 第一个热词站选定服务商后用真实 key 跑一单 |
 | 真实发信与投递 | 本地 `send_email` binding 只模拟发送 | e2e 断言发件箱记录；单元测试覆盖渲染和重试 | 线上验证随第一个热词站 |
 | Google OAuth 与 One Tap 登录 | 需要真实 Google 账号，e2e 用 dev 登录 | 单元测试覆盖跳转校验、PKCE、nonce 和按 `sub` 绑定 | 线上验证随第一个热词站 |
 | Turnstile 浏览器端校验 | 需要真实站点密钥 | 服务端校验的单元测试 | 线上验证 |

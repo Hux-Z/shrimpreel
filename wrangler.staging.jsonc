@@ -21,6 +21,7 @@
     // 部署前把 SUBDOMAIN 换成账号的 workers.dev 子域名（Dashboard → Workers & Pages 右侧可见）
     "SITE_URL": "https://video-template-staging.SUBDOMAIN.workers.dev",
     "PAYMENT_PROVIDER": "waffo",
+    // fal | yir | kie（staging 禁用 mock）
     "VIDEO_PROVIDER": "fal",
     "ADMIN_EMAILS": "admin@example.com",
     // 没有可 Onboard 的域名，staging 不发信（后台“邮件”页记为 skipped）

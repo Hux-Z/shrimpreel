@@ -250,7 +250,7 @@ app.post('/api/uploads', async (c) => {
   if (file.size > site.upload.maxBytes) throw new ApiError(413, 'file_too_large')
   const bytes = new Uint8Array(await file.arrayBuffer())
   const contentType = sniffImageType(bytes)
-  if (!contentType || !(site.upload.contentTypes as readonly string[]).includes(contentType)) {
+  if (!contentType || !(site.upload.contentTypes as readonly string[]).includes(contentType) || (c.env.VIDEO_PROVIDER === 'kie' && contentType === 'image/webp')) {
     throw new ApiError(415, 'unsupported_file_type')
   }
   // 已下架内容的原图不允许再次上传；审核不通过的不落盘、不扣积分
@@ -782,9 +782,9 @@ app.post('/api/webhooks/dodo', async (c) => {
   return c.json({ received: true, ...result })
 })
 
-// 视频服务商完成回调（fal、yir）：只当作“立即轮询”的信号，真实结果由 jobs.ts 用 API key 拉取，
+// 视频服务商完成回调（fal、yir、kie）：只当作“立即轮询”的信号，真实结果由 jobs.ts 用 API key 拉取，
 // 所以只校验地址里的任务 token，不验 yir 的签名头
-for (const provider of ['fal', 'yir']) {
+for (const provider of ['fal', 'yir', 'kie']) {
   app.post(`/api/webhooks/${provider}`, async (c) => {
     const generationId = c.req.query('gen') ?? ''
     const token = c.req.query('token') ?? ''

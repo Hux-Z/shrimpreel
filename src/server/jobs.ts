@@ -59,7 +59,7 @@ export async function storeOutputFromUrl(
   await env.MEDIA.put(key, bytes, { httpMetadata })
   return true
 }
-const POLL_DELAY_SECONDS: Record<string, number> = { mock: 2, fal: 20, yir: 20 }
+const POLL_DELAY_SECONDS: Record<string, number> = { mock: 2, fal: 20, yir: 20, kie: 20 }
 
 export async function enqueueJob(env: Env, message: VideoJobMessage, delaySeconds = 0) {
   await env.VIDEO_QUEUE.send(message, delaySeconds > 0 ? { delaySeconds } : undefined)
@@ -134,6 +134,7 @@ async function submitGeneration(env: Env, generation: GenerationRow) {
     const result = await provider.submit({
       generationId: generation.id,
       durationSeconds: generation.duration_seconds,
+      imageContentType: upload.content_type,
       imageUrl: await signedUploadUrl(env, upload.id, Date.parse(generation.created_at)),
       sourceVideoUrl: templateSourceUrl(env, duration.source),
       sourceVideoKey: `templates/${duration.source}`,
@@ -150,6 +151,15 @@ async function submitGeneration(env: Env, generation: GenerationRow) {
   } catch (error) {
     if (error instanceof VideoProviderError && !error.retryable) {
       await failGeneration(env, generation.id, error.code, error.message)
+      return
+    }
+    // KIE 没有可核实的提交幂等保证。响应丢失或提交后的落库/入队失败都不能重发收费请求。
+    if (provider.retryInterruptedSubmit === false && !(error instanceof VideoProviderError)) {
+      const saved = await env.DB.prepare('SELECT provider_request_id FROM generations WHERE id = ?')
+        .bind(generation.id).first<{ provider_request_id: string | null }>()
+      // 已保存 taskId 时保持 processing，交给轮询和 Cron 补投恢复。
+      if (saved?.provider_request_id) throw error
+      await failGeneration(env, generation.id, `${provider.id}_submit_unknown`, 'Provider submission outcome unknown; automatic resubmission disabled')
       return
     }
     // 可重试：放回 queued，让队列重投时重新抢占
@@ -182,6 +192,12 @@ async function pollGeneration(env: Env, generation: GenerationRow) {
     await env.DB.prepare('UPDATE generations SET updated_at = ? WHERE id = ?').bind(nowIso(), generation.id).run()
     await enqueueJob(env, { kind: 'poll', generationId: generation.id }, POLL_DELAY_SECONDS[provider.id])
     return
+  }
+
+  if (status.billing) {
+    await env.DB.prepare('UPDATE generations SET provider_meta = ? WHERE id = ?')
+      .bind(JSON.stringify({ ...parseMeta(generation.provider_meta), billing: status.billing }), generation.id)
+      .run()
   }
 
   if (status.state === 'failed') {
@@ -274,6 +290,8 @@ export async function runScheduledMaintenance(env: Env) {
       await enqueueJob(env, { kind: 'submit', generationId: generation.id })
     } else if (generation.provider_request_id) {
       await enqueueJob(env, { kind: 'poll', generationId: generation.id })
+    } else if (getVideoProvider(env, generation.provider).retryInterruptedSubmit === false) {
+      await failGeneration(env, generation.id, `${generation.provider}_submit_unknown`, 'Provider submission interrupted; automatic resubmission disabled')
     } else if (generation.attempts < 3) {
       // 抢占后、拿到 request id 前 Worker 中断：放回队列重新提交
       await db
