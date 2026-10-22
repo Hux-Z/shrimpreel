@@ -85,6 +85,13 @@ describe('支付探测', () => {
 })
 
 describe('视频服务商探测', () => {
+  it('KIE 只检查配置，不调用收费接口，也不误用 yir 密钥', async () => {
+    const calls = stubFetch({})
+    expect(await probe('video', { VIDEO_PROVIDER: 'kie' })).toMatchObject({ status: 'fail', message: 'KIE_API_KEY 未配置' })
+    expect(await probe('video', { VIDEO_PROVIDER: 'kie', KIE_API_KEY: 'test' })).toMatchObject({ status: 'warn', provider: 'kie' })
+    expect(calls).toHaveLength(0)
+  })
+
   it('fal：余额充足 ok，低于 5 美元提示；403（Key 没有 billing 权限）只提示，401 fail', async () => {
     const env = { VIDEO_PROVIDER: 'fal', FAL_KEY: 'fal_key_abcdefgh' }
     const calls = stubFetch({ 'api.fal.ai/v1/account/billing': { body: { credits: { current_balance: 42.5, currency: 'USD' } } } })

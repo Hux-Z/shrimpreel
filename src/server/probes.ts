@@ -134,6 +134,10 @@ async function probeVideo(env: Env): Promise<Outcome> {
     if (!Number.isFinite(balance)) return warn('鉴权正常，但读不到余额')
     return balanceOutcome(balance, String(body?.credits?.currency ?? 'USD'), ' fal ')
   }
+  if (id === 'kie') {
+    if (!cleanSecret(env.KIE_API_KEY)) return fail('KIE_API_KEY 未配置')
+    return warn('KIE_API_KEY 已配置；未调用生成接口，鉴权与余额需在 KIE 后台核对')
+  }
   const key = cleanSecret(env.YIR_API_KEY)
   if (!key) return fail('YIR_API_KEY 未配置')
   const response = await fetch('https://gateway.yir.ai/v1/balance', { headers: { Authorization: `Bearer ${key}` } })

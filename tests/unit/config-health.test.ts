@@ -59,6 +59,8 @@ describe('checkConfig', () => {
     expect(keys(ready({ secrets: { SESSION_SECRET: 'change-me-to-a-long-random-string' } }))).toEqual(['error:SESSION_SECRET'])
     expect(keys(ready({ secrets: { SESSION_SECRET: ' ' } }))).toEqual(['error:SESSION_SECRET'])
     expect(keys(ready({ secrets: { SESSION_SECRET: true } }))).toEqual([])
+    expect(keys(ready({ vars: { VIDEO_PROVIDER: 'kie' } }))).toEqual(['error:KIE_API_KEY'])
+    expect(keys(ready({ vars: { VIDEO_PROVIDER: 'kie' }, secrets: { KIE_API_KEY: 'test' } }))).toEqual([])
   })
 
   it('开发默认值：APP_ENV、本地地址、mock 服务商都报错', () => {

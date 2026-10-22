@@ -104,3 +104,12 @@ test('并发轮询只落库一次、成片不被误删；后台记录服务商�
   await expect(page.getByTestId('admin-margin')).toContainText('近 30 天服务商成本')
   await expect(page.getByTestId('admin-margin')).toContainText('估算毛利')
 })
+
+// 回调只触发重新查询，不能依赖调用方传来的成功状态。
+test('KIE 回调拒绝缺失或伪造 token', async ({ request }) => {
+  for (const query of ['', '?gen=nonexistent&token=forged']) {
+    const response = await request.post(`/api/webhooks/kie${query}`, { data: { state: 'success', resultJson: '{"resultUrls":["https://example.com/fake.mp4"]}' } })
+    expect(response.status()).toBe(401)
+    expect(await response.json()).toEqual({ error: 'invalid_webhook' })
+  }
+})

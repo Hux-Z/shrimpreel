@@ -55,6 +55,13 @@ export const site = {
     // fal 按帧计费：16 帧 = 1 个“视频秒”，480p $0.04/视频秒（https://fal.ai/models/fal-ai/wan/v2.2-14b/animate/replace）
     costCentsPerVideoSecond: 4,
     sourceFps: 24,
+    // KIE.ai（可选，VIDEO_PROVIDER=kie）：只支持此模型；站点的 prompt 和参数统一在这里配置。
+    kie: {
+      model: 'kling-2.6/motion-control',
+      prompt: '',
+      mode: '720p' as '720p' | '1080p',
+      characterOrientation: 'video' as 'image' | 'video',
+    },
     // yir.ai 网关（可选，VIDEO_PROVIDER=yir）：照片 + 源视频走 Kling Motion Control。prompt 按热词写清要保留什么。
     yir: {
       model: 'klingai/kling-2.6',

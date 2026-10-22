@@ -15,7 +15,7 @@ https://github.com/user-attachments/assets/895aab94-d0c9-474e-8d90-61a6c551e536
 - 前端/SSR：TanStack Start（React 19）+ Tailwind 4，`/` 英文、`/zh` 中文
 - API：Hono（`/api/*`、`/media/*`、`/sitemap.xml`、`/robots.txt`、IndexNow key 文件），入口 `src/server.ts`
 - 支付：Waffo Pancake（默认）、Dodo Payments，均为 MoR；`mock` 仅用于本地和 e2e
-- 视频：fal.ai queue API（默认），可选 [yir.ai](https://yir.ai/?ref=qianshuixia) 网关；`mock` 仅用于本地和 e2e。见下文“视频服务商”
+- 视频：fal.ai queue API（默认），可选 [KIE.ai](https://kie.ai) 和 [yir.ai](https://yir.ai/?ref=qianshuixia) 网关；`mock` 仅用于本地和 e2e。见下文“视频服务商”
 - 已具备：
   - 用户与积分：Google 登录（含 One Tap）、积分包、月付和年付订阅、积分流水、个人中心（视频/账单/设置/兑换码/邀请链接/注销/导出我的数据）；账单显示实付与退款，订单和积分流水可分页加载，每笔订单有可打印的详情页（税务发票由支付商出具）
   - 订单与生成：订单与部分/全额退款回收、生成任务队列（含死信队列）与失败退积分
@@ -129,7 +129,7 @@ npx wrangler r2 object put <name>-media/templates/<file>.mp4 --file seed/templat
 ```
 
 - `ratelimits[].namespace_id` 在同一账号内要唯一，多个站点不要共用同一组数字。
-- 密钥：`SESSION_SECRET`、`GOOGLE_CLIENT_SECRET`、`WAFFO_MERCHANT_ID`、`WAFFO_PRIVATE_KEY`、`DODO_API_KEY`、`DODO_WEBHOOK_SECRET`、`FAL_KEY`；按需加 `YIR_API_KEY`（`VIDEO_PROVIDER=yir`）、`OPENAI_API_KEY`（图片审核）、`TURNSTILE_SECRET_KEY`。可以逐个 `npx wrangler secret put <NAME>`，也可以用 `scripts/sync-secrets.mjs` 一次同步：
+- 密钥：`SESSION_SECRET`、`GOOGLE_CLIENT_SECRET`、`WAFFO_MERCHANT_ID`、`WAFFO_PRIVATE_KEY`、`DODO_API_KEY`、`DODO_WEBHOOK_SECRET`、`FAL_KEY`；按需加 `YIR_API_KEY`（`VIDEO_PROVIDER=yir`）、`KIE_API_KEY`（`VIDEO_PROVIDER=kie`）、`OPENAI_API_KEY`（图片审核）、`TURNSTILE_SECRET_KEY`。可以逐个 `npx wrangler secret put <NAME>`，也可以用 `scripts/sync-secrets.mjs` 一次同步：
   ```bash
   cp .dev.vars.example .dev.vars.production     # 填上线用的值；.dev.vars.* 已被 .gitignore 忽略
   node scripts/sync-secrets.mjs                 # 只出计划：新增、已存在、只在远端、同步后仍缺，不打印任何值
@@ -194,6 +194,7 @@ SMOKE_BASE_URL=https://video-template-staging.<子域名>.workers.dev SMOKE_EXPE
 | Waffo Pancake | Dashboard → Settings → Webhooks | `https://<domain>/api/webhooks/waffo` |
 | Dodo Payments | Dashboard → Webhooks | `https://<domain>/api/webhooks/dodo` |
 | fal.ai | 代码自动带上 | `https://<domain>/api/webhooks/fal` |
+| KIE.ai | 代码自动带上（仅 HTTPS；本地靠轮询） | `https://<domain>/api/webhooks/kie` |
 | yir.ai | 代码自动带上（只有 https 地址才带，本地开发靠轮询） | `https://<domain>/api/webhooks/yir` |
 
 - **Waffo**：`WAFFO_ENVIRONMENT` 为 `test` 或 `prod`。webhook 用 Waffo 公开的 RSA 公钥验签（已内置在 `src/server/payments/waffo.ts`），无需另配密钥。`WAFFO_PRIVATE_KEY` 支持 PKCS1/PKCS8，可以写成单行带 `\n` 的形式。
@@ -210,7 +211,7 @@ SMOKE_BASE_URL=https://video-template-staging.<子域名>.workers.dev SMOKE_EXPE
   - webhook 由 Svix 投递。支付事件的 metadata（`orderId` 等）会原样回传；退款事件不带 metadata，靠 `payment_id` 反查订单。隧道换域名后用 `--webhook-id` 改 URL，签名密钥不变。
   - 支付成功或失败都会跳回 `return_url`，并追加 `payment_id`、`status`、`email`（买家邮箱）。GA4 的 `page_location` 已去掉 email。
   - 收银台显示的商户名取自 Dodo 注册信息。上 live 前在后台改成品牌名。
-- **fal、yir**：webhook 只当作“该查一下了”的信号，结果总是用 `FAL_KEY` 或 `YIR_API_KEY` 重新拉取。另外每 5 分钟的 Cron 会补查卡住的任务，超过 45 分钟判失败并退积分。
+- **fal、yir、kie**：webhook 只当作“该查一下了”的信号，结果总是用对应服务商的服务端密钥重新拉取。另外每 5 分钟的 Cron 会补查卡住的任务，超过 45 分钟判失败并退积分。
 
 ## 关键设计
 
@@ -231,7 +232,7 @@ SMOKE_BASE_URL=https://video-template-staging.<子域名>.workers.dev SMOKE_EXPE
   - 维护模式：新的生成和下单返回 503 `maintenance`，前台每页顶部显示维护提示；登录、查看、下载和支付回调照常，管理员不受限制，便于维护期间验证。
   - 每日生成上限按 UTC 自然日统计创建的任务数（失败退款的也算），超出返回 429 `daily_limit`，不扣积分；并发提交由同一个 D1 batch 里的断言行兜底。0 = 不限。建议和服务商控制台的消费上限一起用。
   - 邀请奖励设为 0 即暂停邀请（隐藏卡片，链接不再绑定）。暂停期间付款的首单记为拒绝（`paused`），恢复后不会用之后的订单补发。`site.referralRewardCredits` 为 0 时这一项锁定，因为隐私政策按 `site.ts` 生成。
-  - “测试连接”逐项探测 R2、KV、发信（给你发一封测试邮件）、支付（Dodo：逐个套餐核对商品和价格与 `site.ts` 是否一致，售价更低时报失败，因为这样的付款会被判金额不符而不入账；Waffo：用不存在的订单号查单，验证签名和鉴权）、视频服务商（鉴权和余额，低于 5 美元提示）和图片审核（鉴权）。探测只读或自行清理，不建收银台、不提交任务，说明文字里的密钥值会被替换掉。
+  - “测试连接”逐项探测 R2、KV、发信（给你发一封测试邮件）、支付（Dodo：逐个套餐核对商品和价格与 `site.ts` 是否一致，售价更低时报失败，因为这样的付款会被判金额不符而不入账；Waffo：用不存在的订单号查单，验证签名和鉴权）、视频服务商（fal/yir 查鉴权和余额，低于 5 美元提示；KIE 只检查密钥是否配置）和图片审核（鉴权）。探测只读或自行清理，不建收银台、不提交任务，说明文字里的密钥值会被替换掉。
 - **订阅**：默认开启，开关是 `site.subscriptionsEnabled`。模板默认月付 $14.90、年付 $149，每月都发 60 积分；开关设为 `false` 就只卖积分包，定价页、条款、退款政策和 FAQ 里的订阅文案一起隐藏，已有订阅照常续费和发积分。开关、改套餐、支付商配置和排查见使用手册 [docs/subscriptions.md](docs/subscriptions.md)。
   - 每次扣款都是一张订单。续费订单号由支付商的付款 ID 派生，重复投递只建一次；续费金额按订阅时锁定的价格核对，对不上的转人工处理。
   - 订阅积分是当月结束作废的批次（流水 reason 为 `subscription`），生成时先于长期积分扣除。年付首付只发第一个月，其余由每 5 分钟的 Cron 按月补发，重复执行不会重发。
@@ -250,11 +251,12 @@ SMOKE_BASE_URL=https://video-template-staging.<子域名>.workers.dev SMOKE_EXPE
   - 媒体走 `/media/shares/<id>/video` 和 `/media/shares/<id>/poster.jpg`，支持 Range，`Cache-Control: public, max-age=300`，所以停止分享后已打开过的访客最多还能从缓存播放 5 分钟。
   - 失效：停止分享后旧链接返回 404，再分享得到新链接；成片到期或因举报下架返回 410，封面随之删除，之后不能再分享；删除视频时封面一并删除。
   - 迁移 `0015_shares.sql` 给 `generations` 加了 `share_id`、`share_poster_key`、`shared_at`。导出我的数据包含分享链接和开启时间；功能开启时隐私政策多一节“分享的视频”。
-- **成本与毛利**：出片时把服务商成本写入 `generations.provider_cost_cents`：yir 账单已结算时记实际扣费，其余按 `site.video` 里的单价估算。
+- **成本与毛利**：出片时把服务商成本写入 `generations.provider_cost_cents`：yir 账单已结算时记实际扣费；fal 和未结算的 yir 按 `site.video` 单价估算；KIE 只保存确认的 credits，美元费用未知时保持 NULL。
   - fal 按帧计费，16 帧算 1 个视频秒，480p 为 $0.04/视频秒（[价格](https://fal.ai/models/fal-ai/wan/v2.2-14b/animate/replace)）。模板源视频是 24fps，所以成片每秒 6 美分，18 秒约 $1.08。换模型、分辨率或源视频帧率时更新 `costCentsPerVideoSecond` 和 `sourceFps`。
   - 出片后才被判失败的任务（超时、管理员判失败）照样记成本；没出片的失败任务不记。mock 记 0。
   - 后台概览显示近 30 天的服务商成本、消耗积分折算的收入和估算毛利；生成列表逐条显示成本和毛利。每积分实收 = USD 已支付订单的净实收 ÷ 未回收的积分。实际扣费以服务商账单为准。
-- **视频服务商**：`VIDEO_PROVIDER` 可选 `fal`（默认）、`yir` 或 `mock`。[yir.ai](https://yir.ai/?ref=qianshuixia) 是图片视频 API 网关，启用方法：`VIDEO_PROVIDER=yir`，secret 写 `YIR_API_KEY`，模型和提示词在 `site.video.yir` 里改（`src/server/video/yir.ts`）。
+- **KIE.ai**：设 `VIDEO_PROVIDER=kie` 和 `KIE_API_KEY`，在 `site.video.kie` 配置 Kling 2.6 Motion Control（`kling-2.6/motion-control`）。支持单图 + 参考视频、720p/1080p、image/video 方向、可选通用 Prompt；默认 video 方向支持 3–30 秒。只接受 JPEG/PNG 和公网 HTTPS 素材地址。复用队列、R2 和失败退款；提交结果不明时不自动重发，防止重复计费。确认的消耗 credits 保存于 `provider_meta.billing`，美元成本保持 NULL。详见 [KIE 配置、契约和限制](docs/kie.md)。真实收费 API 尚未验证。
+- **视频服务商**：`VIDEO_PROVIDER` 可选 `fal`（默认）、`yir`、`kie` 或 `mock`。[yir.ai](https://yir.ai/?ref=qianshuixia) 是图片视频 API 网关，启用方法：`VIDEO_PROVIDER=yir`，secret 写 `YIR_API_KEY`，模型和提示词在 `site.video.yir` 里改（`src/server/video/yir.ts`）。
   - yir 没有模板所用的角色替换模型（`wan/v2.2-14b/animate/replace`）。接入用的是 Kling 2.6 Motion Control（reference 模式：照片 + 模板源视频），模板只交付接入代码，没有用真实 key 实测（提交、状态查询和错误映射由单元测试覆盖），效果和单价要自己验证，`costCentsPerSecond: 7` 只是估算，上线前按 [yir 模型页](https://yir.ai/models) 的报价改。
   - 提交时用任务 id 作 `Idempotency-Key`：队列重投或 Worker 中断后重新提交，拿回的是同一个 yir 任务，不会重复计费。yir 按请求体识别同一请求，所以照片签名地址按任务创建时间生成，有效期 2 小时，重新提交时地址不变。
   - 没有用 `max_cost` 给单个任务封顶：yir 对用 URL 引用的素材拒绝 `max_cost`。Motion Control 按参考视频秒数计费，而模板源视频的时长是固定的，单价本身就有上限。整体花费建议在 yir Console 给这个 API Key 设月度额度，超出后提交返回 `YIR_SPEND_LIMIT_EXCEEDED`。

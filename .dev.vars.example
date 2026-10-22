@@ -11,6 +11,8 @@ DODO_WEBHOOK_SECRET=
 FAL_KEY=
 # yir.ai 视频网关（VIDEO_PROVIDER=yir 时必填）
 YIR_API_KEY=
+# KIE.ai（VIDEO_PROVIDER=kie 时必填）
+KIE_API_KEY=
 # 图片审核（MODERATION_PROVIDER=openai 时必填）
 OPENAI_API_KEY=
 # Turnstile（vars.TURNSTILE_SITE_KEY 非空时必填）

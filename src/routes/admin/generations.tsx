@@ -172,7 +172,7 @@ function AdminGenerations() {
   )
 }
 
-// 没出片 = 服务商不计费；出片后才失败（已退积分）= 只有成本没有收入
+// 成本未知时不算毛利；出片后才失败（已退积分）= 只有成本没有收入
 function GenerationEconomics({ g, perCredit }: { g: GenerationRow; perCredit: number | null }) {
   if (g.provider_cost_cents === null) return <span className="text-muted">—</span>
   const earned = g.status === 'succeeded' && !g.refunded

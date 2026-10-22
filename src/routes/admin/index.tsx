@@ -71,7 +71,7 @@ function AdminOverview() {
                   <div>
                     <p className="text-xs text-muted">近 30 天服务商成本</p>
                     <p className="mt-1 font-semibold">{money(cost.costCents)}</p>
-                    <p className="text-xs text-muted">{cost.videos} 条出片</p>
+                    <p className="text-xs text-muted">{cost.videos} 条已记录美元成本</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted">消耗积分折算收入</p>
@@ -86,7 +86,7 @@ function AdminOverview() {
                   <div>
                     <p className="text-xs text-muted">估算毛利</p>
                     <p className="mt-1 font-semibold">{margin === null ? '—' : money(margin)}</p>
-                    <p className="text-xs text-muted">实际扣费以服务商账单为准</p>
+                    <p className="text-xs text-muted">仅统计已记录美元成本的任务</p>
                   </div>
                 </div>
               ) : null}

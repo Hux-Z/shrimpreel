@@ -90,12 +90,12 @@ adminRoutes.get('/stats', async (c) => {
       .prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN due_at < ? THEN 1 ELSE 0 END), 0) AS overdue FROM takedown_requests WHERE status = 'open'`)
       .bind(new Date().toISOString()),
     db.prepare(`SELECT COUNT(*) AS n FROM email_outbox WHERE status = 'failed'`),
-    // 成本含出片后才被判失败的任务（服务商照样计费）；收入只算成功且未退积分的
+    // 只对已记录美元成本的任务计算收入和毛利，避免把 KIE 未知费用当作 0。
     db
       .prepare(
         `SELECT COUNT(provider_cost_cents) AS videos, COALESCE(SUM(provider_cost_cents), 0) AS cost_cents,
          COALESCE(SUM(CASE WHEN status = 'succeeded' AND refunded = 0 THEN credits_cost ELSE 0 END), 0) AS credits
-         FROM generations WHERE completed_at >= ?`,
+         FROM generations WHERE completed_at >= ? AND provider_cost_cents IS NOT NULL`,
       )
       .bind(since30d),
     revenuePerCredit(db),
